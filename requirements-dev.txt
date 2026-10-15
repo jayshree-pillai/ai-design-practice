@@ -1,0 +1,2 @@
+# Minimal test dependency; add requests and langgraph when their exercises begin.
+pytest
