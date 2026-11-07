@@ -13,6 +13,56 @@ The ingestion pipeline:
 8. Uploads everything to the index
 """
 
+from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+embedder = OpenAIEmbeddings(model="text-embedding-3-small")
+
+doc_id = "acme-report-2025"  # Unique per document.
+text = "ACME revenue was 120000. Employee count was 1000. " * 40
+
+# Sizes are CHARACTERS by default, not tokens.
+small = RecursiveCharacterTextSplitter(
+    chunk_size=200, chunk_overlap=20
+)
+large = RecursiveCharacterTextSplitter(
+    chunk_size=1000, chunk_overlap=100
+)
+
+# FLAT: split once, then embed every chunk.
+flat_texts = small.split_text(text)
+flat_vectors = embedder.embed_documents(flat_texts)
+
+
+# HIERARCHICAL: store parents and create linked children.
+parents = {}   # parent_id -> larger parent text
+children = []
+
+for i, parent_text in enumerate(large.split_text(text)):
+    parent_id = f"{doc_id}-p{i}"
+    parents[parent_id] = parent_text
+
+    for j, child_text in enumerate(small.split_text(parent_text)):
+        children.append({
+            "id": f"{parent_id}-c{j}",
+            "text": child_text,
+            "parent_id": parent_id,
+        })
+
+# SAME embedding function; supply only the child texts.
+child_vectors = embedder.embed_documents(
+    [child["text"] for child in children]
+)
+
+# Keep each vector with its text and parent link.
+for child, vector in zip(children, child_vectors):
+    child["vector"] = vector
+
+# Store children in the vector index; store parents separately.
+# Search child vectors -> get parent_id -> fetch larger parent text.
+
+
+
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
