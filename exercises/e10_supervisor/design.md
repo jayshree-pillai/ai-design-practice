@@ -1,3 +1,9 @@
+flowchart TD
+    C["Classify"] -->|Policy or order| L["Lookup"]
+    C -->|Clarification| E["End"]
+    L -->|First timeout| L
+    L -->|Answer, empty result, or second timeout| E
+    
 # Exercise 10 — Design and review
 
 Status: not started. No solution or acceptance tests have been implemented.
