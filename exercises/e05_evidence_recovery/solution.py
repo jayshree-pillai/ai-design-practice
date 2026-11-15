@@ -1,110 +1,95 @@
-"""Exercise 05: LangGraph: Evidence Recovery Loop.
+from operator import add
+from typing import Annotated, TypedDict
 
-Not implemented yet. Complete design.md before writing the first solution.
-Keep the implementation within the scope in problem.md.
-"""
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 
-MAX_RETRIES = 2
+MAX_RETRY = 2
 
 
-def retrieve(state):
-    query = state["query"].lower()
-    state["retrieved_docs"] = []
-
-    # Mock search: both keywords are needed.
-    if "refund" in query and "policy" in query:
-        state["retrieved_docs"] = [
-            {"id": "D1", "text": "Refunds are allowed within 30 days."}
-        ]
-
-    return state
+class AgentState(TypedDict):
+    question: str
+    retrieved_docs: Annotated[list[str], add]
+    answer: str
+    citations: str
+    retry_attempts: int
+    validation_status: bool
 
 
-def generate(state):
-    if state["retrieved_docs"]:
-        doc = state["retrieved_docs"][0]
-        state["answer"] = f"{doc['text']} [{doc['id']}]"
+def retrieval(state):
+    docs = [
+        f"Documents that have semantic relevance to {state['question']}"
+    ]
+    return {"retrieved_docs": docs}
+
+
+def generate_answer(state):
+    answer = "LLM thinks this is the answer"
+    citations = "valid doc links"
+    return {"answer": answer, "citations": citations}
+
+
+def validate_answer(state):
+    if "True" in state["citations"]:
+        status = True
     else:
-        state["answer"] = "No supporting evidence found."
+        status = False
 
-    return state
-
-
-def validate(state):
-    state["citation_status"] = "fail"
-
-    # Check that the answer includes the source text and citation.
-    if state["retrieved_docs"]:
-        doc = state["retrieved_docs"][0]
-        citation = f"[{doc['id']}]"
-
-        if doc["text"] in state["answer"] and citation in state["answer"]:
-            state["citation_status"] = "pass"
-
-    return state
+    return {"validation_status": status}
 
 
 def route_after_validate(state):
-    if state["citation_status"] == "pass":
+    if state["validation_status"]:
         return END
-    if state["retry_count"] >= MAX_RETRIES:
-        return "escalate"
-    return "recover"
+    else:
+        if state["retry_attempts"] < MAX_RETRY:
+            return "recover"
+        else:
+            return "escalate"
 
 
 def recover(state):
-    state["retry_count"] += 1
-
-    if state["retry_count"] == 1:
-        state["query"] += " policy"
-    else:
-        state["query"] += " details"
-
-    return state
+    return {
+        "retry_attempts": state["retry_attempts"] + 1,
+        "question": f"{state['question']} additional supporting evidence",
+    }
 
 
 def escalate(state):
-    state["answer"] = "Escalating: could not find enough supporting evidence."
-    return state
+    return {
+        "answer": "Max retries reached; answer could not be found."
+    }
 
 
 def main():
-    builder = StateGraph(dict)
+    builder = StateGraph(AgentState)
 
-    builder.add_node("retrieve", retrieve)
-    builder.add_node("generate", generate)
-    builder.add_node("validate", validate)
+    builder.add_node("retrieval", retrieval)
+    builder.add_node("generate_answer", generate_answer)
+    builder.add_node("validate_answer", validate_answer)
     builder.add_node("recover", recover)
     builder.add_node("escalate", escalate)
 
-    builder.add_edge(START, "retrieve")
-    builder.add_edge("retrieve", "generate")
-    builder.add_edge("generate", "validate")
+    builder.add_edge(START, "retrieval")
+    builder.add_edge("retrieval", "generate_answer")
+    builder.add_edge("generate_answer", "validate_answer")
 
-    builder.add_conditional_edges("validate", route_after_validate)
+    builder.add_conditional_edges(
+        "validate_answer", route_after_validate
+    )
 
-    builder.add_edge("recover", "retrieve")
+    builder.add_edge("recover", "retrieval")
     builder.add_edge("escalate", END)
 
     graph = builder.compile()
 
-    questions = [
-        "What is the refund policy?",
-        "Can I get a refund?",
-        "What are the parking rules?",
-    ]
-
-    for question in questions:
-        result = graph.invoke({
-            "question": question,
-            "query": question,
-            "retrieved_docs": [],
-            "answer": "",
-            "citation_status": "",
-            "retry_count": 0,
-        })
-        print(result["answer"], "Retries:", result["retry_count"])
+    result = graph.invoke({
+        "question": "some question",
+        "retrieved_docs": [],
+        "answer": "",
+        "citations": "",
+        "retry_attempts": 0,
+        "validation_status": False,
+    })
 
 
 if __name__ == "__main__":
