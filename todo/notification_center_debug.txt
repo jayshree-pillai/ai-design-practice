@@ -1,0 +1,177 @@
+"""NotificationCenter debugging practice. Run: python notification_center_debug.py
+
+Edit NotificationCenter until all five tests pass.
+"""
+
+import unittest
+from enum import Enum
+
+
+class DeliveryStatus(Enum):
+    QUEUED = 1
+    SENT = 2
+    DELIVERED = 3
+    FAILED = 4
+
+
+class Notification:
+    """Data about a single notification created for an order."""
+
+    def __init__(self, notification_id, order_id, created_at):
+        self.notification_id = notification_id
+        self.order_id = order_id
+        self.created_at = created_at  # Minutes since the start of the window
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return (
+            self.notification_id == other.notification_id
+            and self.order_id == other.order_id
+            and self.created_at == other.created_at
+        )
+
+    def __str__(self):
+        return (
+            f"Notification {self.notification_id} (order {self.order_id}) "
+            f"created={self.created_at}"
+        )
+
+
+class NotificationCenter:
+    """Data for managing order notifications, and methods staff use to query them."""
+
+    def __init__(self):
+        self.notifications = []
+        # Each notification ID maps to a set of (DeliveryStatus, timestamp) tuples.
+        self.dict_notifications = {}
+
+    def add_notification(self, notification):
+        """Registers a notification for the current window."""
+        self.notifications.append(notification)
+        self.dict_notifications[notification.notification_id] = set()
+
+    def get_notification(self, notification_id):
+        """Returns the notification with the given ID, or None if there is no such notification."""
+        for notification in self.notifications:
+            if notification.notification_id == notification_id:
+                return notification
+        return None
+
+    def get_order_notifications(self, order_id):
+        """Returns the IDs of all notifications for the given order, sorted in ascending order."""
+        result = []
+        for notification in self.notifications:
+            if notification.order_id == order_id:
+                result.append(notification.notification_id)
+        # sorted(result)
+        return result
+
+    def add_updates(self, notification_id, lst):
+        if notification_id not in self.dict_notifications:
+            return 0
+
+        stored_updates = self.dict_notifications[notification_id]
+        before = len(stored_updates)
+
+        for update in lst:
+            if update in stored_updates:
+                continue
+            stored_updates.add(update)
+
+        after = len(stored_updates)
+        return after - before
+
+    def get_update_count(self, notification_id):
+        return self.dict_notifications.get(notification_id, 0)
+
+
+class TestSuite(unittest.TestCase):
+    def test_notification(self):
+        n = Notification(1, 500, 30)
+        self.assertEqual(n.notification_id, 1)
+        self.assertEqual(n.order_id, 500)
+        self.assertEqual(n.created_at, 30)
+
+    def test_get_order_notifications(self):
+        center = NotificationCenter()
+        center.add_notification(Notification(1, 1, 0))
+        center.add_notification(Notification(2, 2, 0))
+        center.add_notification(Notification(3, 1, 0))
+        center.add_notification(Notification(4, 2, 0))
+        center.add_notification(Notification(5, 1, 0))
+
+        self.assertEqual(center.get_order_notifications(1), [1, 3, 5])
+        self.assertEqual(center.get_order_notifications(2), [2, 4])
+        self.assertEqual(center.get_order_notifications(99), [])
+
+    def test_order_ids_registered_out_of_order(self):
+        center = NotificationCenter()
+        center.add_notification(Notification(5, 1, 0))
+        center.add_notification(Notification(2, 2, 0))
+        center.add_notification(Notification(1, 1, 0))
+        center.add_notification(Notification(3, 1, 0))
+
+        self.assertEqual(center.get_order_notifications(1), [1, 3, 5])
+
+    def test_add_updates(self):
+        center = NotificationCenter()
+        center.add_notification(Notification(10, 1, 0))
+        center.add_notification(Notification(20, 1, 0))
+
+        # Two new updates.
+        self.assertEqual(
+            center.add_updates(10, [(DeliveryStatus.SENT, 5), (DeliveryStatus.DELIVERED, 15)]),
+            2,
+        )
+        # Only (FAILED, 20) is new.
+        self.assertEqual(
+            center.add_updates(10, [(DeliveryStatus.SENT, 5), (DeliveryStatus.FAILED, 20)]),
+            1,
+        )
+        # Both updates are already stored.
+        self.assertEqual(
+            center.add_updates(10, [(DeliveryStatus.SENT, 5), (DeliveryStatus.FAILED, 20)]),
+            0,
+        )
+        # A duplicate within the same batch counts once.
+        self.assertEqual(
+            center.add_updates(20, [
+                (DeliveryStatus.SENT, 8),
+                (DeliveryStatus.SENT, 8),
+                (DeliveryStatus.DELIVERED, 12),
+            ]),
+            2,
+        )
+        self.assertEqual(center.get_update_count(20), 2)
+
+        # Unknown notification ID.
+        self.assertEqual(center.add_updates(999, [(DeliveryStatus.SENT, 0)]), 0)
+
+        # Same timestamp, different statuses.
+        self.assertEqual(
+            center.add_updates(10, [(DeliveryStatus.SENT, 25), (DeliveryStatus.FAILED, 25)]),
+            2,
+        )
+        # Same status, different timestamps.
+        self.assertEqual(
+            center.add_updates(20, [(DeliveryStatus.SENT, 30), (DeliveryStatus.SENT, 35)]),
+            2,
+        )
+
+    def test_get_update_count(self):
+        center = NotificationCenter()
+        center.add_notification(Notification(10, 1, 0))
+        center.add_notification(Notification(30, 2, 0))  # Never updated
+
+        center.add_updates(10, [(DeliveryStatus.SENT, 5), (DeliveryStatus.DELIVERED, 15)])
+        center.add_updates(10, [(DeliveryStatus.SENT, 5), (DeliveryStatus.FAILED, 20)])
+        center.add_updates(999, [(DeliveryStatus.SENT, 0)])  # Ignored
+
+        self.assertEqual(center.get_update_count(10), 3)
+        self.assertEqual(center.get_update_count(30), 0)
+        self.assertEqual(center.get_update_count(999), 0)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

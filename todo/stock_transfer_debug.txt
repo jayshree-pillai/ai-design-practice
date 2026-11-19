@@ -1,0 +1,56 @@
+"""Debugging exercise 2. Run with: python stock_transfer_debug.py
+
+A stockroom moves whole units between existing bins. move() returns True
+when it completes the transfer. If it returns False, every bin must keep
+its previous quantity. Fix Stockroom so the supplied tests pass.
+"""
+
+import unittest
+
+
+class Stockroom:
+    def __init__(self, quantities):
+        self.quantities = quantities.copy()
+
+    def move(self, source, destination, units):
+        if units <= 0 or source not in self.quantities:
+            return False
+        if self.quantities[source] < units:
+            return False
+
+        self.quantities[source] -= units
+        if destination not in self.quantities:
+            return False
+
+        self.quantities[destination] += units
+        return True
+
+
+class TestStockroom(unittest.TestCase):
+    def setUp(self):
+        self.stock = Stockroom({"shelf": 5, "cart": 2})
+
+    def test_successful_move_updates_both_bins(self):
+        self.assertTrue(self.stock.move("shelf", "cart", 3))
+        self.assertEqual(self.stock.quantities, {"shelf": 2, "cart": 5})
+
+    def test_insufficient_stock_preserves_both_bins(self):
+        self.assertFalse(self.stock.move("shelf", "cart", 6))
+        self.assertEqual(self.stock.quantities, {"shelf": 5, "cart": 2})
+
+    def test_unknown_destination_preserves_stock(self):
+        self.assertFalse(self.stock.move("shelf", "crate", 2))
+        self.assertEqual(self.stock.quantities, {"shelf": 5, "cart": 2})
+
+    def test_valid_move_after_a_rejected_move(self):
+        self.assertFalse(self.stock.move("shelf", "crate", 2))
+        self.assertTrue(self.stock.move("shelf", "cart", 5))
+        self.assertEqual(self.stock.quantities, {"shelf": 0, "cart": 7})
+
+    def test_zero_units_preserves_both_bins(self):
+        self.assertFalse(self.stock.move("shelf", "cart", 0))
+        self.assertEqual(self.stock.quantities, {"shelf": 5, "cart": 2})
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

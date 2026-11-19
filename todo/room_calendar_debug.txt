@@ -1,0 +1,52 @@
+"""Debugging exercise 1. Run with: python room_calendar_debug.py
+
+A meeting reserves a room from its start minute up to its end minute.
+A meeting may start the minute another ends. book() returns True on success
+and False for a conflict. Fix RoomCalendar so the supplied tests pass.
+"""
+
+import unittest
+
+
+class RoomCalendar:
+    def __init__(self):
+        self.meetings = []
+
+    def book(self, start, end):
+        if start >= end:
+            raise ValueError("End must be later than start")
+
+        for booked_start, booked_end in self.meetings:
+            if start <= booked_end and booked_start <= end:
+                return False
+
+        self.meetings.append((start, end))
+        return True
+
+
+class TestRoomCalendar(unittest.TestCase):
+    def setUp(self):
+        self.room = RoomCalendar()
+        self.room.book(10, 20)
+
+    def test_separate_meetings(self):
+        self.assertTrue(self.room.book(25, 30))
+
+    def test_shared_minutes_are_a_conflict(self):
+        for start, end in [(8, 12), (12, 18), (18, 25), (10, 20)]:
+            with self.subTest(start=start, end=end):
+                self.assertFalse(self.room.book(start, end))
+
+    def test_meeting_starts_when_previous_one_ends(self):
+        self.assertTrue(self.room.book(20, 25))
+
+    def test_meeting_ends_when_next_one_starts(self):
+        self.assertTrue(self.room.book(5, 10))
+
+    def test_invalid_duration(self):
+        with self.assertRaises(ValueError):
+            self.room.book(10, 10)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
