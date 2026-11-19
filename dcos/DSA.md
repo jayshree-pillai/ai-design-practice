@@ -1072,3 +1072,45 @@ print(bfs(None))  # Expected: []
 **Recall:** Dequeue → record → enqueue left → enqueue right.
 
 **Complexity:** O(n) time and O(n) space including the returned list.
+
+### 12d. Maximum depth of a binary tree: reuse DFS with depth
+
+Return the number of nodes on the longest root-to-leaf path. An empty tree has depth 0. Reuse 12b's DFS, storing `(node, depth)` and keeping the largest depth seen. Uses `TreeNode` from 12a.
+
+```python
+def max_depth(root):
+    if root is None:
+        return 0
+
+    stack = [(root, 1)]  # node, depth
+    best = 0
+
+    while stack:
+        node, depth = stack.pop()
+        best = max(best, depth)
+
+        # Children are one level deeper.
+        if node.right:
+            stack.append((node.right, depth + 1))
+        if node.left:
+            stack.append((node.left, depth + 1))
+
+    return best
+
+
+# 1
+# |---- 2 (left)
+# |     |---- 4 (left)
+# |---- 3 (right)
+root = TreeNode(1)
+root.left = TreeNode(2)
+root.right = TreeNode(3)
+root.left.left = TreeNode(4)
+
+print(max_depth(root))  # Expected: 3
+print(max_depth(None))  # Expected: 0
+```
+
+**Recall:** DFS + carry depth + keep the maximum.
+
+**Complexity:** O(n) time and O(h) extra stack space, where h is tree height; O(n) space in the worst case.
