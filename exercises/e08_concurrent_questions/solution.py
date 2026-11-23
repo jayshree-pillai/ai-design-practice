@@ -4,9 +4,11 @@ Not implemented yet. Complete design.md before writing the first solution.
 Keep the implementation within the scope in problem.md.
 
 
-Yes, your 4 + 1 math works if every question takes the same amount of time. If each takes one second, 13 questions finish in about 5 seconds: 3 + 3 + 3 + 3 + 1.
+Yes, your 4 + 1 math works if every question takes the same amount of time. 
+If each takes one second, 13 questions finish in about 5 seconds: 3 + 3 + 3 + 3 + 1.
 
-In the snippet you shared, asyncio.gather schedules all 13 questions. Semaphore(3) lets up to three run inside async with semaphore at once. Say Q1, Q2, and Q3 start together. If Q2 finishes first, Q4 can start immediately while Q1 and Q3 are still running
+In the snippet you shared, asyncio.gather schedules all 13 questions. Semaphore(3) lets up to three run inside async with semaphore at once. 
+Say Q1, Q2, and Q3 start together. If Q2 finishes first, Q4 can start immediately while Q1 and Q3 are still running
 
 """
 import asyncio
