@@ -1,0 +1,161 @@
+import asyncio
+
+async def run_batch(questions,service):
+	semphore = asyncio.Semaphore(3)
+	results ={}
+	async def process_one(question):
+		async with semaphore:
+			try:
+				answer = await service.answer(question)
+				results[question["id"]]={
+					"answer":answer,
+					"success":True,
+					"error":None}
+			except ex:
+				...
+	tasks =  [process_one(q) for q in questions]
+	await asyncio.gather(*tasks)
+	return results
+------------------------------------------------------------------
+# function_app.py
+import azure.functions as func
+from langgraph.graph import StateGraph
+
+app = func.FunctionApp()
+
+# Startup — once per Python worker process
+builder = StateGraph(ChatState)                       # 1. Build
+# Add Supervisor, SQL, Evidence nodes and edges...
+graph = builder.compile(checkpointer=checkpointer)    # 2. Compile
+
+
+# Each incoming chat request
+# @app.post("/chat") ## another way to write it
+@app.route(route="chat", methods=["POST"])
+async def chat(req: func.HttpRequest):
+    # Authenticate and prepare input_state and config...
+    result = await graph.ainvoke(                     # 3. Invoke
+        input_state,
+        config=config,
+    )
+    return func.HttpResponse(result["answer"])
+------------------------------------------------------------------
+FunctionApp>>HostProcess>>Python Worker Process actually running invoke
+	Azure routes the request to a host instance.
+	The Functions host dispatches the invocation to a Python worker.
+	That worker executes its chat() handler.
+	The handler calls await graph.ainvoke(...) on its compiled graph.
+	The workflow completes and the handler returns the answer.
+	Different requests can be handled by different workers. Each invocation has separate execution state.
+	
+await graph.ainvoke(..)
+await supervisor.ainvoke(..)
+await mcp_client.call_tool(...)
+
+Compiled graph - The module-level variable and references used by executions
+API handler's coroutine execution -The request runtime/task and awaiting execution chain
+Graph coroutine - The handler's run_coroutine variable and its await
+------------------------------------------------------------------
+# pydantic validation
+result = EmailClassification.model_validate(model_output)
+------------------------------------------------------------------
+model_with_tools = model.bind_tools(tools)
+
+response = model_with_tools.invoke(messages)
+messages.append(response)
+calls = response.tool_calls
+
+for call in calls:
+	selected_tool = tools_by_name[call["name"]]
+	result = selected_tool.invoke(call["args"])
+
+messages.append(
+	ToolMessage(content=str(result), tool_call_id=call["id"])
+)
+------------------------------------------------------------------
+import requests
+response = requests.get("xxx")
+response.raise_for_status()
+data = response.json()
+image = data["image"]
+
+-----------------------------------------------------------------
+#2 ways:
+def explain_revenue():
+    return model.invoke("Explain revenue in one sentence.")
+
+async def explain_revenue_async():
+    return await model.ainvoke("Explain revenue in one sentence.")
+-----------------------------------------------------------------
+class Report(BaseModel):
+    company: str
+    growth_percent: float = Field(description="Use 12 for 12%.")
+structured_model = model.with_structured_output(Report) #Passing a Pydantic class returns a validated object of that class.
+
+result = structured_model.invoke("Acme's revenue grew 12%.")
+-----------------------------------------------------------------
+asyncio.run(main())  -- Creates an event loop → runs main() → closes the loop afterward
+await main() -- Runs main() using the existing event loop; waits for its result while allowing other async tasks to run
+----------------------------------------------------------------
+Langgraph tools:
+
+builder.add_node("model", call_model)
+builder.add_node("tools", ToolNode([get_revenue]))
+builder.add_edge(START, "model")
+builder.add_conditional_edges("model", tools_condition)
+builder.add_edge("tools", "model")
+----------------------------------------------------------------
+### Langgraph HITL
+
+def review(state):
+    approved = interrupt({"report": state["report"]})
+    return {"status": "approved" if approved else "rejected"}
+	
+graph = builder.compile(checkpointer=InMemorySaver())
+config = {"configurable": {"thread_id": "report-1"}}
+result = graph.invoke(...,config)
+snapshot = graph.get_state(config)
+print(snapshot.values, snapshot.next)
+
+#Command(update=..., goto=...) updates state and chooses the next destination; run from a node;
+#Command(resume=...) serves a different purpose: pass it to the graph to resume an interrupt.
+----------------------------------------------------------------
+#Pydantic
+@field_validator("question", mode="before")
+@classmethod
+def trim_question(cls, value):
+
+@model_validator(mode="after")
+def check_year_range(self):
+
+Method	Input 							→ Output
+SearchRequest.model_validate(data)		:Dictionary → model instance
+SearchRequest.model_validate_json(text)	:JSON string → model instance
+request.model_dump()					:Model instance → dictionary
+request.model_dump_json()				:Model instance → JSON string
+----------------------------------------------------------------
+MCP:
+server = MCPServer("finance")
+
+@server.tool()
+def get_revenue(company: str, year: int
+
+@server.resource("reports://annual/{company}/{year}")
+def report(company: str, year: str):
+
+@server.prompt()
+def review_report(company: str):
+
+async def main():
+    async with Client(server) as client:
+		listed = await client.list_tools()
+		result = await client.call_tool(...)
+		
+		print(result.is_error)             # False
+
+		templates = await client.list_resource_templates()
+		result_3 = await client.read_resource(
+
+		listed_prompts = await client.list_prompts()
+		result_4 = await client.get_prompt(..)
+----------------------------------------------------------------
